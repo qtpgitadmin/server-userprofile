@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Career Agent Relationship Schema",
+  "type": "object",
+  "required": ["careerAgentId", "candidateId"],
+  "properties": {
+    "_id": {
+      "type": "string",
+      "description": "MongoDB ObjectId - unique identifier for the career agent relationship (transformed to relationshipId in API responses)"
+    },
+    "careerAgentId": {
+      "type": "string",
+      "description": "User ID of the career agent",
+      "minLength": 1
+    },
+    "candidateId": {
+      "type": "string",
+      "description": "User ID of the candidate (can have multiple relationships but only one active)",
+      "minLength": 1
+    },
+    "relationshipStatus": {
+      "type": "string",
+      "enum": ["active", "inactive", "pending", "proposed", "requested", "rejected"],
+      "default": "active",
+      "description": "Current status of the career agent relationship"
+    },
+    "startDate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the career agent relationship started (defaults to current date)"
+    },
+    "endDate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When the career agent relationship ended (null if still active)"
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "Additional message about the career agent relationship"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the relationship was created (automatically set by timestamps)"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the relationship was last updated (automatically set by timestamps)"
+    },
+    "careerAgent": {
+      "type": "object",
+      "description": "Virtual field - populated career agent user profile details",
+      "properties": {
+        "userId": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "headline": { "type": "string" },
+        "industry": { "type": "string" },
+        "location": { "type": "string" },
+        "profilePictureUrl": { "type": "string" }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "description": "Virtual field - populated candidate user profile details",
+      "properties": {
+        "userId": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "headline": { "type": "string" },
+        "industry": { "type": "string" },
+        "location": { "type": "string" },
+        "profilePictureUrl": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": false
+}

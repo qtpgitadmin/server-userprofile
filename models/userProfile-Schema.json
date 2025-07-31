@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LinkedIn Profile Schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the profile"
+    },
+    "firstName": {
+      "type": "string",
+      "description": "First name of the user"
+    },
+    "lastName": {
+      "type": "string",
+      "description": "Last name of the user"
+    },
+    "headline": {
+      "type": "string",
+      "description": "Professional headline or tagline"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Professional summary or about section"
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "country": { "type": "string" },
+        "city": { "type": "string" }
+      }
+    },
+    "industry": {
+      "type": "string",
+      "description": "Professional industry"
+    },
+    "company": {
+      "type": "string",
+      "description": "Current company or organization"
+    },
+    "profilePictureUrl": {
+      "type": "string",
+      "description": "URL of the profile picture"
+    },
+    "backgroundPictureUrl": {
+      "type": "string",
+      "description": "URL of the background image"
+    },
+    "contactInfo": {
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "websites": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "experience": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "company": { "type": "string" },
+          "location": { "type": "string" },
+          "startDate": { "type": "string", "format": "date" },
+          "endDate": { "type": "string", "format": "date" },
+          "current": { "type": "boolean" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "education": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "school": { "type": "string" },
+          "degree": { "type": "string" },
+          "fieldOfStudy": { "type": "string" },
+          "startDate": { "type": "string", "format": "date" },
+          "endDate": { "type": "string", "format": "date" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "languages": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "certifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "organization": { "type": "string" },
+          "issueDate": { "type": "string", "format": "date" },
+          "expirationDate": { "type": "string", "format": "date" },
+          "credentialId": { "type": "string" }
+        }
+      }
+    },
+    "publications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "publisher": { "type": "string" },
+          "publicationDate": { "type": "string", "format": "date" },
+          "url": { "type": "string" }
+        }
+      }
+    },
+    "volunteerExperience": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "organization": { "type": "string" },
+          "role": { "type": "string" },
+          "startDate": { "type": "string", "format": "date" },
+          "endDate": { "type": "string", "format": "date" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "recommender": { "type": "string" },
+          "relationship": { "type": "string" },
+          "text": { "type": "string" },
+          "date": { "type": "string", "format": "date" }
+        }
+      }
+    }
+  },
+  "required": ["id", "firstName", "lastName"]
+}

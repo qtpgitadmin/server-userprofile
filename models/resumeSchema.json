@@ -1,0 +1,83 @@
+{
+  "type": "object",
+  "properties": {
+    "resumeId": {
+      "type": "string",
+      "description": "Auto-generated unique identifier for the resume"
+    },
+    "forUserId": {
+      "type": "string",
+      "description": "The userId for whom the resume is uploaded"
+    },
+    "byUserId": {
+      "type": "string",
+      "description": "The userId who uploaded the resume"
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Name of the resume"
+    },
+    "filePath": {
+      "type": "string",
+      "description": "Path to the resume file in storage"
+    },
+    "originalFileName": {
+      "type": "string",
+      "description": "Original file name of the uploaded resume"
+    },
+    "fileSize": {
+      "type": "number",
+      "description": "Size of the resume file in bytes"
+    },
+    "mimeType": {
+      "type": "string",
+      "enum": [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "description": "MIME type of the resume file"
+    },
+    "createdBy": {
+      "type": "string",
+      "description": "User who created the resume record"
+    },
+    "isActive": {
+      "type": "boolean",
+      "description": "Whether the resume is active"
+    },
+    "downloadCount": {
+      "type": "number",
+      "description": "Number of times the resume has been downloaded"
+    },
+    "lastDownloadedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp of the last download"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the resume was created"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the resume was last updated"
+    }
+  },
+  "required": [
+    "resumeId",
+    "forUserId",
+    "byUserId",
+    "name",
+    "filePath",
+    "originalFileName",
+    "fileSize",
+    "mimeType",
+    "createdBy",
+    "isActive",
+    "createdAt",
+    "updatedAt"
+  ]

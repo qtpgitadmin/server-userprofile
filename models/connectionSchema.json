@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Connection Relationship Schema",
+  "type": "object",
+  "required": ["connectionType"],
+  "properties": {
+    "_id": {
+      "type": "string",
+      "description": "MongoDB ObjectId - unique identifier for the connection relationship (transformed to connectionId in API responses)"
+    },
+    "careerAgentId": {
+      "type": "string",
+      "description": "User ID of the career agent (required only when connectionType is 'careerAgent')",
+      "minLength": 1
+    },
+    "candidateId": {
+      "type": "string",
+      "description": "User ID of the candidate (required only when connectionType is 'careerAgent')",
+      "minLength": 1
+    },
+    "requestorUserId": {
+      "type": "string",
+      "description": "User ID of the person who initiated the connection request (required only when connectionType is 'friend')",
+      "minLength": 1
+    },
+    "recipientUserId": {
+      "type": "string",
+      "description": "User ID of the person who received the connection request (required only when connectionType is 'friend')",
+      "minLength": 1
+    },
+    "connectionType": {
+      "type": "string",
+      "enum": ["friend", "careerAgent"],
+      "description": "Type of connection - friend relationship or career agent mentorship"
+    },
+    "relationshipStatus": {
+      "type": "string",
+      "enum": ["active", "inactive", "pending", "proposed", "requested", "rejected"],
+      "default": "active",
+      "description": "Current status of the connection relationship"
+    },
+    "startDate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the connection relationship started (defaults to current date)"
+    },
+    "endDate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When the connection relationship ended (null if still active)"
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "Additional message about the connection relationship"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the relationship was created (automatically set by timestamps)"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the relationship was last updated (automatically set by timestamps)"
+    },
+    "careerAgent": {
+      "type": "object",
+      "description": "Virtual field - populated career agent user profile details",
+      "properties": {
+        "userId": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "headline": { "type": "string" },
+        "industry": { "type": "string" },
+        "location": { "type": "string" },
+        "profilePictureUrl": { "type": "string" }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "description": "Virtual field - populated candidate user profile details",
+      "properties": {
+        "userId": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "headline": { "type": "string" },
+        "industry": { "type": "string" },
+        "location": { "type": "string" },
+        "profilePictureUrl": { "type": "string" }
+      }
+    },
+    "requestor": {
+      "type": "object",
+      "description": "Virtual field - populated requestor user profile details",
+      "properties": {
+        "userId": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "headline": { "type": "string" },
+        "industry": { "type": "string" },
+        "location": { "type": "string" },
+        "profilePictureUrl": { "type": "string" }
+      }
+    },
+    "recipient": {
+      "type": "object",
+      "description": "Virtual field - populated recipient user profile details",
+      "properties": {
+        "userId": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "headline": { "type": "string" },
+        "industry": { "type": "string" },
+        "location": { "type": "string" },
+        "profilePictureUrl": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": false
+}
