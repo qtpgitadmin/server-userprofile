@@ -722,4 +722,436 @@ router.get('/download/:resumeId', verifyToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/resume/search:
+ *   get:
+ *     summary: Search resumes based on various criteria
+ *     tags: [Resume]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: skills
+ *         schema:
+ *           type: string
+ *         description: Comma-separated skills to search for
+ *       - in: query
+ *         name: location
+ *         schema:
+ *           type: string
+ *         description: Location to search for (city or country)
+ *       - in: query
+ *         name: languages
+ *         schema:
+ *           type: string
+ *         description: Comma-separated languages to search for
+ *       - in: query
+ *         name: industry
+ *         schema:
+ *           type: string
+ *         description: Industry to search for
+ *       - in: query
+ *         name: experience
+ *         schema:
+ *           type: string
+ *         description: Experience level (e.g., "junior", "senior", "mid-level")
+ *       - in: query
+ *         name: company
+ *         schema:
+ *           type: string
+ *         description: Company name to search for
+ *       - in: query
+ *         name: education
+ *         schema:
+ *           type: string
+ *         description: Education level or institution
+ *       - in: query
+ *         name: certification
+ *         schema:
+ *           type: string
+ *         description: Certification name to search for
+ *       - in: query
+ *         name: minExperienceYears
+ *         schema:
+ *           type: integer
+ *         description: Minimum years of experience
+ *       - in: query
+ *         name: maxExperienceYears
+ *         schema:
+ *           type: integer
+ *         description: Maximum years of experience
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Maximum number of resumes to return
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *     responses:
+ *       200:
+ *         description: Resumes found successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Resume'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/search', verifyToken, async (req, res) => {
+  try {
+    const {
+      skills,
+      location,
+      languages,
+      industry,
+      experience,
+      company,
+      education,
+      certification,
+      minExperienceYears,
+      maxExperienceYears,
+      limit = 50,
+      page = 1
+    } = req.query;
+
+    console.log('Resume search parameters:', req.query);
+
+    // Build aggregation pipeline to search in UserProfile collection
+    const pipeline = [];
+
+    // Match active resumes first
+    pipeline.push({
+      $match: {
+        isActive: true
+      }
+    });
+
+    // Lookup user profiles to get searchable fields
+    pipeline.push({
+      $lookup: {
+        from: 'userprofiles',
+        localField: 'forUserId',
+        foreignField: 'userId',
+        as: 'userProfile'
+      }
+    });
+
+    // Unwind the userProfile array
+    pipeline.push({
+      $unwind: {
+        path: '$userProfile',
+        preserveNullAndEmptyArrays: true
+      }
+    });
+
+    // Build match conditions based on search parameters
+    const matchConditions = {};
+
+    // Skills search (case-insensitive, partial match)
+    if (skills) {
+      const skillsArray = skills.split(',').map(skill => skill.trim());
+      matchConditions['userProfile.skills'] = {
+        $in: skillsArray.map(skill => new RegExp(skill, 'i'))
+      };
+    }
+
+    // Location search (search in both city and country)
+    if (location) {
+      const locationRegex = new RegExp(location, 'i');
+      matchConditions.$or = [
+        { 'userProfile.location.city': locationRegex },
+        { 'userProfile.location.country': locationRegex }
+      ];
+    }
+
+    // Languages search
+    if (languages) {
+      const languagesArray = languages.split(',').map(lang => lang.trim());
+      matchConditions['userProfile.languages'] = {
+        $in: languagesArray.map(lang => new RegExp(lang, 'i'))
+      };
+    }
+
+    // Industry search
+    if (industry) {
+      matchConditions['userProfile.industry'] = new RegExp(industry, 'i');
+    }
+
+    // Company search (search in current company and experience)
+    if (company) {
+      const companyRegex = new RegExp(company, 'i');
+      matchConditions.$or = matchConditions.$or || [];
+      matchConditions.$or.push(
+        { 'userProfile.company': companyRegex },
+        { 'userProfile.experience.company': companyRegex }
+      );
+    }
+
+    // Education search (search in school and degree)
+    if (education) {
+      const educationRegex = new RegExp(education, 'i');
+      matchConditions.$or = matchConditions.$or || [];
+      matchConditions.$or.push(
+        { 'userProfile.education.school': educationRegex },
+        { 'userProfile.education.degree': educationRegex },
+        { 'userProfile.education.fieldOfStudy': educationRegex }
+      );
+    }
+
+    // Certification search
+    if (certification) {
+      const certificationRegex = new RegExp(certification, 'i');
+      matchConditions.$or = matchConditions.$or || [];
+      matchConditions.$or.push(
+        { 'userProfile.certifications.name': certificationRegex },
+        { 'userProfile.certifications.organization': certificationRegex }
+      );
+    }
+
+    // Experience level search (search in headline and experience titles)
+    if (experience) {
+      const experienceRegex = new RegExp(experience, 'i');
+      matchConditions.$or = matchConditions.$or || [];
+      matchConditions.$or.push(
+        { 'userProfile.headline': experienceRegex },
+        { 'userProfile.experience.title': experienceRegex }
+      );
+    }
+
+    // Add experience years filter using aggregation to calculate years
+    if (minExperienceYears || maxExperienceYears) {
+      // Add a stage to calculate total experience years
+      pipeline.push({
+        $addFields: {
+          totalExperienceYears: {
+            $sum: {
+              $map: {
+                input: '$userProfile.experience',
+                as: 'exp',
+                in: {
+                  $divide: [
+                    {
+                      $subtract: [
+                        {
+                          $cond: {
+                            if: '$$exp.current',
+                            then: new Date(),
+                            else: { $ifNull: ['$$exp.endDate', new Date()] }
+                          }
+                        },
+                        { $ifNull: ['$$exp.startDate', new Date()] }
+                      ]
+                    },
+                    365.25 * 24 * 60 * 60 * 1000 // Convert milliseconds to years
+                  ]
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Add experience years filter to match conditions
+      if (minExperienceYears) {
+        matchConditions.totalExperienceYears = { $gte: parseInt(minExperienceYears) };
+      }
+      if (maxExperienceYears) {
+        matchConditions.totalExperienceYears = matchConditions.totalExperienceYears || {};
+        matchConditions.totalExperienceYears.$lte = parseInt(maxExperienceYears);
+      }
+    }
+
+    // Apply search filters if any conditions exist
+    if (Object.keys(matchConditions).length > 0) {
+      pipeline.push({
+        $match: matchConditions
+      });
+    }
+
+    // Add pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: parseInt(limit) });
+
+    // Project the final result
+    pipeline.push({
+      $project: {
+        resumeId: 1,
+        forUserId: 1,
+        byUserId: 1,
+        name: 1,
+        filePath: 1,
+        originalFileName: 1,
+        fileSize: 1,
+        mimeType: 1,
+        createdBy: 1,
+        isActive: 1,
+        downloadCount: 1,
+        lastDownloadedAt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        totalExperienceYears: 1,
+        userProfile: {
+          userId: 1,
+          firstName: 1,
+          lastName: 1,
+          headline: 1,
+          summary: 1,
+          location: 1,
+          industry: 1,
+          company: 1,
+          profilePictureUrl: 1,
+          skills: 1,
+          languages: 1,
+          experience: 1,
+          education: 1,
+          certifications: 1
+        }
+      }
+    });
+
+    console.log('Aggregation pipeline:', JSON.stringify(pipeline, null, 2));
+
+    // Execute the aggregation
+    const resumes = await Resume.aggregate(pipeline);
+
+    // Get total count for pagination (run same pipeline without skip/limit)
+    const countPipeline = pipeline.slice(0, -2); // Remove skip and limit stages
+    countPipeline.push({ $count: 'total' });
+    const countResult = await Resume.aggregate(countPipeline);
+    const total = countResult.length > 0 ? countResult[0].total : 0;
+
+    // Generate file URLs for each resume
+    const resumesWithUrls = await Promise.all(
+      resumes.map(async (resume) => {
+        const fileUrl = await getUrl(resume.filePath);
+        return {
+          ...resume,
+          fileUrl: fileUrl,
+          formattedFileSize: resume.fileSize ? formatFileSize(resume.fileSize) : 'Unknown',
+          matchScore: calculateMatchScore(resume, req.query) // Add relevance score
+        };
+      })
+    );
+
+    // Sort by match score (highest first)
+    resumesWithUrls.sort((a, b) => b.matchScore - a.matchScore);
+
+    const totalPages = Math.ceil(total / parseInt(limit));
+
+    console.log(`Found ${resumes.length} resumes matching search criteria`);
+
+    res.json({
+      success: true,
+      data: resumesWithUrls,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages
+      },
+      searchCriteria: req.query
+    });
+
+  } catch (error) {
+    console.error('Error searching resumes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Helper function to format file size
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Helper function to calculate match score for relevance ranking
+function calculateMatchScore(resume, searchParams) {
+  let score = 0;
+  const userProfile = resume.userProfile;
+  
+  if (!userProfile) return score;
+
+  // Skills match (high weight)
+  if (searchParams.skills && userProfile.skills) {
+    const searchSkills = searchParams.skills.split(',').map(s => s.trim().toLowerCase());
+    const userSkills = userProfile.skills.map(s => s.toLowerCase());
+    const matchingSkills = searchSkills.filter(skill => 
+      userSkills.some(userSkill => userSkill.includes(skill))
+    );
+    score += matchingSkills.length * 10;
+  }
+
+  // Industry match (medium weight)
+  if (searchParams.industry && userProfile.industry) {
+    if (userProfile.industry.toLowerCase().includes(searchParams.industry.toLowerCase())) {
+      score += 5;
+    }
+  }
+
+  // Location match (medium weight)
+  if (searchParams.location && userProfile.location) {
+    const locationLower = searchParams.location.toLowerCase();
+    if (userProfile.location.city?.toLowerCase().includes(locationLower) ||
+        userProfile.location.country?.toLowerCase().includes(locationLower)) {
+      score += 5;
+    }
+  }
+
+  // Languages match (low weight)
+  if (searchParams.languages && userProfile.languages) {
+    const searchLanguages = searchParams.languages.split(',').map(l => l.trim().toLowerCase());
+    const userLanguages = userProfile.languages.map(l => l.toLowerCase());
+    const matchingLanguages = searchLanguages.filter(lang => 
+      userLanguages.some(userLang => userLang.includes(lang))
+    );
+    score += matchingLanguages.length * 2;
+  }
+
+  // Experience years match (medium weight)
+  if (resume.totalExperienceYears) {
+    if (searchParams.minExperienceYears && resume.totalExperienceYears >= parseInt(searchParams.minExperienceYears)) {
+      score += 3;
+    }
+    if (searchParams.maxExperienceYears && resume.totalExperienceYears <= parseInt(searchParams.maxExperienceYears)) {
+      score += 3;
+    }
+  }
+
+  return score;
+}
+
 export default router;
