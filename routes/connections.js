@@ -2278,4 +2278,144 @@ router.put('/:connectionId', verifyToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/connections/candidates:
+ *   get:
+ *     summary: Get all candidate IDs for whom the current user is a career agent
+ *     tags: [Connections]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of candidate IDs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 candidateIds:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/candidates', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    // Find all connections where the requester is the career agent
+    const connections = await Connection.find({
+      careerAgentId: userId
+    }, 'candidateId');
+
+    
+
+
+    // Extract unique candidateIds
+    const candidateIds = connections
+      .map(conn => conn.candidateId)
+      .filter(id => !!id);
+
+    console.log('Unique Candidate IDs:', candidateIds);
+
+    res.json({
+      success: true,
+      candidateIds
+    });
+  } catch (error) {
+    console.error('Error fetching candidate IDs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/connections/careeragent/relationship:
+ *   get:
+ *     summary: Get the career agent relationship with a specific user
+ *     description: |
+ *       Returns the connection record where the current user is the career agent and the specified user is the candidate.
+ *     tags: [Connections]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: forUserId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID of the candidate
+ *     responses:
+ *       200:
+ *         description: Career agent relationship found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Connection'
+ *       400:
+ *         description: Missing forUserId parameter
+ *       404:
+ *         description: Relationship not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/careeragent/relationship', verifyToken, async (req, res) => {
+  try {
+    const careerAgentId = req.user.userId;
+    const { forUserId } = req.query;
+
+    if (!forUserId) {
+      return res.status(400).json({
+        success: false,
+        message: 'forUserId query parameter is required'
+      });
+    }
+
+    const connection = await Connection.findOne({
+      connectionType: 'careerAgent',
+      careerAgentId,
+      candidateId: forUserId
+    })
+      .populate('requestor')
+      .populate('recipient')
+      .populate('careerAgent')
+      .populate('candidate');
+
+    if (!connection) {
+      return res.status(404).json({
+        success: false,
+        message: 'Career agent relationship not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: connection
+    });
+  } catch (error) {
+    console.error('Error fetching career agent relationship:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 export default router;

@@ -842,50 +842,6 @@ router.get('/potentialcontact', verifyToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/userprofile/{userId}:
- *   get:
- *     summary: Get user profile by ID
- *     tags: [UserProfile]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: User profile retrieved successfully
- *       404:
- *         description: User profile not found
- */
-router.get('/:userId', verifyToken, async (req, res) => {
-  try {
-    console.log('Fetching user profile for userId:', req.params.userId);
-    const userProfile = await UserProfile.findOne({ userId: req.params.userId });
-    
-    if (!userProfile) {
-      return res.status(404).json({
-        success: false,
-        message: 'User profile not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: userProfile
-    });
-  } catch (error) {
-    console.error('Error fetching user profile:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
 
 /**
  * @swagger
@@ -1366,6 +1322,278 @@ router.post('/:userId/education', verifyToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding education:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/userprofile/search:
+ *   get:
+ *     summary: Search user profiles by name (first or last name, with suggestions)
+ *     tags: [UserProfile]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Name to search for (first or last name)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Maximum number of profiles to return
+ *     responses:
+ *       200:
+ *         description: User profiles matching the search
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/UserProfile'
+ *                 suggestions:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/UserProfile'
+ *       400:
+ *         description: Missing or invalid search parameter
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/search', verifyToken, async (req, res) => {
+  console.log('ANY REQUEST TO /api/userprofile/search');
+  try {
+    const { name } = req.query;
+    const limit = parseInt(req.query.limit) || 10;
+    console.log(`[UserProfile Search] Query params: name="${name}", limit=${limit}, user=${req.user?.userId}`);
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      console.log('[UserProfile Search] Missing or invalid name parameter');
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid name parameter'
+      });
+    }
+
+    // 1. Try exact (case-insensitive) and partial match using regex
+    const regex = new RegExp(name.trim(), 'i');
+    console.log(`[UserProfile Search] Searching for direct matches with regex: ${regex}`);
+    let matches = await UserProfile.find({
+      $or: [
+        { firstName: regex },
+        { lastName: regex }
+      ]
+    })
+      .limit(limit)
+      .select('userId firstName lastName headline industry company location profilePictureUrl contactInfo');
+    console.log(`[UserProfile Search] Direct matches found: ${matches.length}`);
+    console.log('Matches:', matches);
+
+    // 2. If no matches, use fuzzy search for suggestions (Levenshtein distance)
+    let suggestions = [];
+    if (matches.length === 0) {
+      console.log('[UserProfile Search] No direct matches, running fuzzy search for suggestions');
+      // Fetch a larger pool for fuzzy matching
+      const allProfiles = await UserProfile.find({})
+        .select('userId firstName lastName headline industry company location profilePictureUrl contactInfo')
+        .limit(100);
+      console.log(`[UserProfile Search] Fuzzy pool size: ${allProfiles.length}`);
+
+      // Simple Levenshtein distance implementation
+      function levenshtein(a, b) {
+        if (!a.length) return b.length;
+        if (!b.length) return a.length;
+        const matrix = Array.from({ length: a.length + 1 }, () =>
+          Array(b.length + 1).fill(0)
+        );
+        for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+        for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= a.length; i++) {
+          for (let j = 1; j <= b.length; j++) {
+            matrix[i][j] = a[i - 1] === b[j - 1]
+              ? matrix[i - 1][j - 1]
+              : Math.min(
+                  matrix[i - 1][j - 1] + 1, // substitution
+                  matrix[i][j - 1] + 1,     // insertion
+                  matrix[i - 1][j] + 1      // deletion
+                );
+          }
+        }
+        return matrix[a.length][b.length];
+      }
+
+      // Compute distance for each profile and sort by closest match
+      suggestions = allProfiles
+        .map(profile => {
+          const firstDist = levenshtein(name.toLowerCase(), (profile.firstName || '').toLowerCase());
+          const lastDist = levenshtein(name.toLowerCase(), (profile.lastName || '').toLowerCase());
+          return {
+            profile,
+            distance: Math.min(firstDist, lastDist)
+          };
+        })
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, limit)
+        .map(item => item.profile);
+
+      console.log(`[UserProfile Search] Suggestions found: ${suggestions.length}`);
+    }
+
+    console.log('[UserProfile Search] --- Success ---');
+    res.json({
+      success: true,
+      data: matches,
+      suggestions: matches.length === 0 ? suggestions : []
+    });
+  } catch (error) {
+    console.error('[UserProfile Search] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+
+
+/**
+ * @swagger
+ * /api/userprofile/{userId}:
+ *   get:
+ *     summary: Get user profile by ID
+ *     tags: [UserProfile]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: User profile retrieved successfully
+ *       404:
+ *         description: User profile not found
+ */
+router.get('/:userId', verifyToken, async (req, res) => {
+  try {
+    console.log('Fetching user profile for userId:', req.params.userId);
+    const userProfile = await UserProfile.findOne({ userId: req.params.userId });
+    
+    if (!userProfile) {
+      return res.status(404).json({
+        success: false,
+        message: 'User profile not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: userProfile
+    });
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/userprofile/basic-info:
+ *   post:
+ *     summary: Get basic profile info (first name, last name, email, headline) for a list of userIds
+ *     tags: [UserProfile]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: List of userIds to fetch
+ *     responses:
+ *       200:
+ *         description: Profiles found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       userId:
+ *                         type: string
+ *                       firstName:
+ *                         type: string
+ *                       lastName:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                       headline:
+ *                         type: string
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/basic-info', verifyToken, async (req, res) => {
+  try {
+    const requesterUserId = req.user.userId;
+    const { userIds } = req.body;
+    userIds.push(requesterUserId); // Ensure requester's own profile is included
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'userIds must be a non-empty array'
+      });
+    }
+
+    const profiles = await UserProfile.find({ userId: { $in: userIds } })
+      .select('userId firstName lastName headline contactInfo.email')
+      .lean();
+
+    const result = profiles.map(profile => ({
+      userId: profile.userId,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      email: profile.contactInfo?.email || null,
+      headline: profile.headline || ''
+    }));
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Error in /basic-info user profile lookup:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

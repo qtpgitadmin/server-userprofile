@@ -785,7 +785,9 @@ router.get('/download/:resumeId', verifyToken, async (req, res) => {
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 50
+ *           default: 20
+ *           minimum: 1
+ *           maximum: 100
  *         description: Maximum number of resumes to return
  *       - in: query
  *         name: page
@@ -836,11 +838,15 @@ router.get('/search', verifyToken, async (req, res) => {
       certification,
       minExperienceYears,
       maxExperienceYears,
-      limit = 50,
+      limit = 20,
       page = 1
     } = req.query;
 
     console.log('Resume search parameters:', req.query);
+
+    // Validate and set limit with maximum cap
+    const searchLimit = Math.min(parseInt(limit) || 20, 100); // Default 20, max 100
+    const searchPage = Math.max(parseInt(page) || 1, 1); // Minimum page 1
 
     // Build aggregation pipeline to search in UserProfile collection
     const pipeline = [];
@@ -995,9 +1001,9 @@ router.get('/search', verifyToken, async (req, res) => {
     }
 
     // Add pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (searchPage - 1) * searchLimit;
     pipeline.push({ $skip: skip });
-    pipeline.push({ $limit: parseInt(limit) });
+    pipeline.push({ $limit: searchLimit });
 
     // Project the final result
     pipeline.push({
@@ -1063,7 +1069,7 @@ router.get('/search', verifyToken, async (req, res) => {
     // Sort by match score (highest first)
     resumesWithUrls.sort((a, b) => b.matchScore - a.matchScore);
 
-    const totalPages = Math.ceil(total / parseInt(limit));
+    const totalPages = Math.ceil(total / searchLimit);
 
     console.log(`Found ${resumes.length} resumes matching search criteria`);
 
@@ -1072,8 +1078,8 @@ router.get('/search', verifyToken, async (req, res) => {
       data: resumesWithUrls,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: searchPage,
+        limit: searchLimit,
         totalPages
       },
       searchCriteria: req.query

@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft/2020-12/schema",
+  "title": "UserCoverLetter",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "System-generated unique identifier for the cover letter"
+    },
+    "fromUserId": {
+      "type": "string",
+      "description": "The ID of the user who created/saved the cover letter"
+    },
+    "forUserId": {
+      "type": "string",
+      "description": "The ID of the user for whom the cover letter is saved"
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 255,
+      "description": "Title of the cover letter"
+    },
+    "text": {
+      "type": "string",
+      "description": "Main body or content of the cover letter"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The ISO 8601 date-time when the cover letter was created"
+    }
+  },
+  "required": ["fromUserId", "forUserId", "title", "text", "createdAt"],
+  "additionalProperties": false
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/conversation.schema.json",
+  "title": "Conversation",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "title": { "type": "string" },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 timestamp"
+    },
+    "history_window": {
+      "type": "string",
+      "pattern": "^(ALL|NONE|DAYS_[0-9]+)$"
+    },
+    "participants": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/participant" }
+    },
+    "messages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/message" }
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "jobId": { "type": "string" },
+        "postId": { "type": "string" },
+        "resumeId": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["id", "created_at", "participants", "messages"],
+  "$defs": {
+    "participant": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "joined_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO8601 timestamp"
+        },
+        "left_at": {
+          "anyOf": [
+            { "type": "string", "format": "date-time" },
+            { "type": "null" }
+          ]
+        },
+        "history_window": {
+          "type": "string",
+          "pattern": "^(ALL|NONE|DAYS_[0-9]+)$"
+        }
+      },
+      "required": ["id", "userId", "joined_at"]
+    },
+    "message": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sender_id": { "type": "string" },
+        "content": { "type": "string" },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO8601 timestamp"
+        },
+        "visible_to": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["id", "sender_id", "content", "created_at"]
+    }
+  }
+}

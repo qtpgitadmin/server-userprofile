@@ -14,6 +14,8 @@ import verificationRouter from './routes/verification.js';
 import resumeRouter from './routes/resume.js';
 import careerAgentRouter from './routes/careerAgent.js';
 import connectionsRouter from './routes/connections.js';
+import conversationsRouter from './routes/conversations.js';
+import coverletterRouter from './routes/coverLetter.js';
 
 dotenv.config();
 
@@ -91,6 +93,8 @@ app.use('/api/userprofile', userProfileRouter);
 app.use('/api/verification', verificationRouter);
 app.use('/api/resume', resumeRouter);
 app.use('/api/connections', connectionsRouter);
+app.use('/api/conversations', conversationsRouter);
+app.use('/api/coverLetter', coverletterRouter);
 
 app.get('/api/health', (req, res) => {
   res.json({
