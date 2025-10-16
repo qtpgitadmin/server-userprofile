@@ -755,7 +755,7 @@ router.get('/download/:resumeId', verifyToken, async (req, res) => {
  *         name: experience
  *         schema:
  *           type: string
- *         description: Experience level (e.g., "junior", "senior", "mid-level")
+ *         description: Experience level (e.g., "Junior", "Senior", "Mid-level")
  *       - in: query
  *         name: company
  *         schema:
