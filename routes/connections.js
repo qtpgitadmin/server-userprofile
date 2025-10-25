@@ -1520,7 +1520,38 @@ router.get('/connected', verifyToken, async (req, res) => {
           },
           connectionTypes: 1,
           roles: 1,
-          connectionDate: { $arrayElemAt: ['$connections.createdAt', 0] }
+          connectionDate: { $arrayElemAt: ['$connections.createdAt', 0] },
+          isMyCareerAgent: {
+            $anyElementTrue: {
+              $map: {
+                input: '$connections',
+                as: 'conn',
+                in: {
+                  $and: [
+                    { $eq: ['$$conn.connectionType', 'careerAgent'] },
+                    { $eq: ['$$conn.careerAgentId', '$_id'] },
+                    { $eq: ['$$conn.candidateId', userId] }
+                  ]
+                }
+              }
+            }
+          },
+          // Add isMyCandidate field
+          isMyCandidate: {
+            $anyElementTrue: {
+              $map: {
+                input: '$connections',
+                as: 'conn',
+                in: {
+                  $and: [
+                    { $eq: ['$$conn.connectionType', 'careerAgent'] },
+                    { $eq: ['$$conn.careerAgentId', userId] },
+                    { $eq: ['$$conn.candidateId', '$_id'] }
+                  ]
+                }
+              }
+            }
+          }
         }
       },
       // Stage 8: Sort and limit
@@ -2307,6 +2338,7 @@ router.put('/:connectionId', verifyToken, async (req, res) => {
  */
 router.get('/candidates', verifyToken, async (req, res) => {
   try {
+   
     const userId = req.user.userId;
     // Find all connections where the requester is the career agent
     const connections = await Connection.find({
