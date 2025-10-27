@@ -1505,12 +1505,7 @@ router.get('/connected', verifyToken, async (req, res) => {
           firstName: { $arrayElemAt: ['$userProfile.firstName', 0] },
           lastName: { $arrayElemAt: ['$userProfile.lastName', 0] },
           headline: { $arrayElemAt: ['$userProfile.headline', 0] },
-          company: { 
-            $ifNull: [
-              { $arrayElemAt: ['$userProfile.company', 0] },
-              { $arrayElemAt: ['$userProfile.industry', 0] }
-            ]
-          },
+          company: { $arrayElemAt: ['$userProfile.company', 0] },
           profilePictureUrl: { $arrayElemAt: ['$userProfile.profilePictureUrl', 0] },
           mutualConnections: { 
             $ifNull: [{ $arrayElemAt: ['$friendsStats.friendsCount', 0] }, 0]
@@ -1666,9 +1661,14 @@ router.get('/potentialcontact', verifyToken, async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const { connectionType } = req.query;
 
-    console.log('=== /potentialcontact START ===');
-    console.log('User ID:', userId);
-    console.log('Query parameters:', { limit, connectionType });
+    // Check if requester has any active career agent connection
+    const requesterCareerAgentConnection = await Connection.findOne({
+      candidateId: userId,
+      connectionType: 'careerAgent',
+      relationshipStatus: 'active'
+    });
+
+    const hasCareerAgent = !!requesterCareerAgentConnection;
 
     // Enhanced strategy: Use aggregation to filter out users I'm already connected to
     // and get comprehensive user information with relationship statistics
@@ -1819,7 +1819,28 @@ router.get('/potentialcontact', verifyToken, async (req, res) => {
           as: 'careerAgentStats'
         }
       },
-      // Stage 6: Project the final structure
+      // Stage 6: Lookup if this user already has a career agent
+      {
+        $lookup: {
+          from: 'connections',
+          let: { candidateId: '$userId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$connectionType', 'careerAgent'] },
+                    { $eq: ['$candidateId', '$$candidateId'] },
+                    { $eq: ['$relationshipStatus', 'active'] }
+                  ]
+                }
+              }
+            }
+          ],
+          as: 'careerAgentConnections'
+        }
+      },
+      // Stage 7: Project the final structure
       {
         $project: {
           _id: 0,
@@ -1837,10 +1858,13 @@ router.get('/potentialcontact', verifyToken, async (req, res) => {
           },
           candidatesCount: {
             $ifNull: [{ $arrayElemAt: ['$careerAgentStats.candidatesCount', 0] }, 0]
+          },
+          hasCareerAgent: {
+            $gt: [{ $size: '$careerAgentConnections' }, 0]
           }
         }
       },
-      // Stage 7: Sort and limit
+      // Stage 8: Sort and limit
       { $sort: { firstName: 1, lastName: 1 } },
       { $limit: limit }
     ];
@@ -1849,17 +1873,11 @@ router.get('/potentialcontact', verifyToken, async (req, res) => {
 
     const potentialContacts = await UserProfile.aggregate(pipeline);
 
-    console.log('Raw aggregation result count:', potentialContacts.length);
-    console.log('Sample potential contact (first item):', 
-      potentialContacts.length > 0 ? JSON.stringify(potentialContacts[0], null, 2) : 'No results');
-    console.log('Fetched potential contacts:', potentialContacts.length, 'users found');
-    console.log('****potential contacts:', JSON.stringify(potentialContacts, null, 2));
-    console.log('=== /potentialcontact END ===');
-
     res.json({
       success: true,
       data: potentialContacts,
-      count: potentialContacts.length
+      count: potentialContacts.length,
+      hasCareerAgent // <-- top-level field for requester
     });
 
   } catch (error) {
@@ -2313,7 +2331,7 @@ router.put('/:connectionId', verifyToken, async (req, res) => {
  * @swagger
  * /api/connections/candidates:
  *   get:
- *     summary: Get all candidate IDs for whom the current user is a career agent
+ *         summary: Get all candidate IDs for whom the current user is a career agent
  *     tags: [Connections]
  *     security:
  *       - bearerAuth: []

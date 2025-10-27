@@ -726,9 +726,16 @@ router.get('/potentialcontact', verifyToken, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const currentUserId = req.user.userId;
-    
-    console.log('Fetching potential contacts for user:', currentUserId);
-    
+
+    // Check if requester has any active career agent connection
+    const requesterCareerAgentConnection = await Connection.findOne({
+      candidateId: currentUserId,
+      connectionType: 'careerAgent',
+      relationshipStatus: 'active'
+    });
+
+    const hasCareerAgent = !!requesterCareerAgentConnection;
+
     // 1. Get all candidateIds where current user is the career agent
     const candidatesWhereMeAsAgent = await Connection.find({
       careerAgentId: currentUserId,
@@ -831,7 +838,8 @@ router.get('/potentialcontact', verifyToken, async (req, res) => {
         total: transformedProfiles.length,
         excludedRelationships: excludeUserIds.length - 1, // -1 for current user
         limit: limit
-      }
+      },
+      hasCareerAgent // <-- add this field
     });
   } catch (error) {
     console.error('Error fetching potential contacts:', error);

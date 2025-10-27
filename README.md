@@ -10,3 +10,7 @@ This is often required for the SDK to respect your CLI config.
 
 3. AWS_DEFAULT_REGION
 Set this if your region is not set elsewhere:
+
+
+The audit are written from the api with a separate call to write to audit.
+This increased the latency but upon getting investment implement using the MongoDB Change Streams

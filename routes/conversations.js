@@ -240,10 +240,21 @@ router.post('/:id/messages', verifyToken, async (req, res) => {
 
     const conversation = await Conversation.findOneAndUpdate(
       { id },
-      { $push: { messages: message } },
+      { 
+        $push: { messages: message },
+        $set: { latest_message_at: message.created_at } 
+      },
       { new: true }
     );
     if (!conversation) return res.status(404).json({ success: false, message: 'Conversation not found' });
+    
+     // Update last_read_message_at for the sender participant
+    const participant = conversation.participants.find(p => p.userId === sender_id);
+    if (participant) {
+      participant.last_read_message_at = message.created_at;
+      await conversation.save();
+    }
+
     res.json({ success: true, data: message });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
@@ -469,12 +480,13 @@ router.delete('/:id/participants/:participantId', verifyToken, async (req, res) 
     const conversation = await Conversation.findOne({ id });
     if (!conversation) return res.status(404).json({ success: false, message: 'Conversation not found' });
 
-    const partIndex = conversation.participants.findIndex(p => p.id === participantId);
-    if (partIndex === -1) return res.status(404).json({ success: false, message: 'Participant not found' });
+    const participant = conversation.participants.find(p => p.id === participantId);
+    if (!participant) return res.status(404).json({ success: false, message: 'Participant not found' });
 
-    conversation.participants.splice(partIndex, 1);
+    participant.deleted = true; // Mark as deleted for this participant
+
     await conversation.save();
-    res.json({ success: true, message: 'Participant removed' });
+    res.json({ success: true, message: 'Participant marked as deleted' });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -532,11 +544,22 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     // For each conversation, include only the first message (if any)
     const conversationsWithFirstMessage = conversations.map(conv => {
       const obj = conv.toObject ? conv.toObject() : conv;
+       // Find participant matching requester
+      const participant = (obj.participants || []).find(p => p.userId === userId);
+      let read = true;
+      if (participant) {
+        const lastRead = participant.last_read_message_at ? new Date(participant.last_read_message_at) : null;
+        const latestMsg = obj.latest_message_at ? new Date(obj.latest_message_at) : null;
+        if (latestMsg && (!lastRead || lastRead < latestMsg)) {
+          read = false;
+        }
+      }
       return {
         ...obj,
         messages: Array.isArray(obj.messages) && obj.messages.length > 0
           ? [obj.messages[0]]
-          : []
+          : [],
+        read
       };
     });
     console.log(`Returning ${conversationsWithFirstMessage.length} conversations with first messages for user ${userId}`);
@@ -640,4 +663,136 @@ router.get('/:id/messages/user/:userId', verifyToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/conversations/{id}:
+ *   put:
+ *     summary: Update a conversation's details
+ *              for example, title, history_window, context
+ *     tags: [Conversations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Conversation ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               history_window:
+ *                 type: string
+ *               context:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Conversation updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Conversation'
+ *       404:
+ *         description: Conversation not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+router.put('/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, history_window, context } = req.body;
+
+    const updateFields = {};
+    if (title !== undefined) updateFields.title = title;
+    if (history_window !== undefined) updateFields.history_window = history_window;
+    if (context !== undefined) updateFields.context = context;
+
+    const conversation = await Conversation.findOneAndUpdate(
+      { id },
+      { $set: updateFields },
+      { new: true }
+    );
+    if (!conversation) return res.status(404).json({ success: false, message: 'Conversation not found' });
+
+    res.json({ success: true, data: conversation });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// ...existing code...
+
+/**
+ * @swagger
+ * /api/conversations/{id}/read:
+ *   post:
+ *     summary: Mark all messages as read for the requester in a conversation
+ *     tags: [Conversations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Conversation ID
+ *     responses:
+ *       200:
+ *         description: Participant's last_read_message_at updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       404:
+ *         description: Conversation or participant not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/:id/read', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+
+    const conversation = await Conversation.findOne({ id });
+    console.log('Marking conversation as read:', id, 'for user:', userId);
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    const participant = conversation.participants.find(p => p.userId === userId);
+
+    if (!participant) {
+      return res.status(404).json({ success: false, message: 'Participant not found in conversation' });
+    }
+
+    participant.last_read_message_at = new Date().toISOString();
+    await conversation.save();
+
+    res.json({ success: true, message: 'Marked as read' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
 export default router;

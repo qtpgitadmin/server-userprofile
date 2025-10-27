@@ -7,7 +7,9 @@ const ParticipantSchema = new mongoose.Schema({
   lastName: String,
   joined_at: { type: Date, required: true },
   left_at: { type: Date, default: null },
-  history_window: { type: String, enum: ['ALL', 'NONE'], match: /^(ALL|NONE|DAYS_[0-9]+)$/ }
+  history_window: { type: String, enum: ['ALL', 'NONE'], match: /^(ALL|NONE|DAYS_[0-9]+)$/ },
+  deleted: { type: Boolean, default: false },
+  last_read_message_at: { type: Date, default: null }
 }, { _id: false });
 
 const MessageSchema = new mongoose.Schema({
@@ -23,6 +25,7 @@ const ConversationSchema = new mongoose.Schema({
   title: String,
   created_at: { type: Date, required: true },
   history_window: { type: String, match: /^(ALL|NONE|DAYS_[0-9]+)$/ },
+    latest_message_at: Date, 
   participants: [ParticipantSchema],
   messages: [MessageSchema],
   context: {
